@@ -70,6 +70,7 @@ dd{margin:0;font-weight:700;color:var(--navy)}
   <div class="card" id="card"></div>
 </main>
 <script src="conexion.js"></script>
+<script src="calendario.js"></script>
 <script>
 (function(){
 "use strict";
@@ -83,7 +84,7 @@ function hoyChile(){ try { return new Intl.DateTimeFormat("en-CA", { timeZone: "
 
 var S = { doc: "rut", codigo: "", valor: "", res: null, error: "", aviso: "", seguro: false, cargando: false };
 try { var q = new URLSearchParams(location.search).get("c"); if (q) S.codigo = q.toUpperCase().slice(0, 12); } catch (e) {}
-var DB = null, WA = "", HORAS_ANULAR = 2;
+var DB = null, WA = "", HORAS_ANULAR = 2, CFGD = {};
 function ahoraChileISO(){ try { var p = {}; new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()).forEach(function(x){ p[x.type] = x.value; }); return p.year + "-" + p.month + "-" + p.day + "T" + (p.hour === "24" ? "00" : p.hour) + ":" + p.minute; } catch (e) { return new Date().toISOString().slice(0, 16); } }
 
 function formulario(){
@@ -104,6 +105,11 @@ function detalle(){
     "<dl><dt>Paciente</dt><dd>" + esc(r.paciente_nombre) + "</dd><dt>Tratamiento</dt><dd>" + esc(r.tratamiento) + "</dd><dt>Profesional</dt><dd>" + esc(r.profesional) +
     "</dd><dt>Código</dt><dd>" + esc(r.codigo) + "</dd></dl>";
   if (S.aviso) html += '<p class="msg ok" role="status">' + esc(S.aviso) + "</p>";
+  if (vigente && window.Calendario) {
+    var tr = (CFGD.tratamientos || []).filter(function(t){ return t.nombre === r.tratamiento; })[0] || {};
+    html += '<div class="acts">' + Calendario.botones({ titulo: r.tratamiento + " · " + (CFGD.nombre || "Clínica dental"), fecha: r.fecha, hora: String(r.hora).slice(0, 5), duracion: +tr.duracion || 30,
+      lugar: CFGD.direccion || "", codigo: r.codigo, detalle: "Hora con " + r.profesional + ". Código de reserva: " + r.codigo + ". Para revisarla o anularla: " + location.href.split("?")[0] + "?c=" + r.codigo }, "btn line") + "</div>";
+  }
   if (S.error) html += '<p class="msg bad" role="alert">' + esc(S.error) + "</p>";
   if (activa && !S.seguro) html += '<div class="acts"><button type="button" class="btn line" id="anular">Anular esta hora</button><a class="btn line" href="mi-reserva.html">Buscar otra</a></div>';
   else if (activa) html += '<p><b>¿Seguro que quiere anular su hora?</b> La hora queda libre para otro paciente.</p><div class="acts"><button type="button" class="btn danger" id="si"' + (S.cargando ? ' aria-busy="true"' : "") + ">" + (S.cargando ? "Anulando…" : "Sí, anular") + '</button><button type="button" class="btn line" id="no">No, mantener</button></div>';
@@ -149,7 +155,7 @@ window.conectar().then(function(db){
   DB = db;
   if (!db) return pintar();
   db.from("config").select("datos").eq("id", 1).single().then(function(r){
-    var d = r.data && r.data.datos || {};
+    var d = r.data && r.data.datos || {}; CFGD = d;
     if (d.nombre) { document.querySelectorAll("[data-nombre]").forEach(function(el){ el.textContent = d.nombre; }); document.title = "Mi reserva | " + d.nombre; }
     WA = (d.whatsapp || "").replace(/\D/g, "");
     if (d.reglas && d.reglas.cancelar_hasta_horas != null && d.reglas.cancelar_hasta_horas !== "") HORAS_ANULAR = +d.reglas.cancelar_hasta_horas;
