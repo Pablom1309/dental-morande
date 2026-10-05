@@ -212,6 +212,9 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
 .done .ok{width:56px;height:56px;border-radius:50%;background:var(--ok-bg);color:var(--ok);display:grid;place-items:center}
 .done .ok svg{width:28px;height:28px}
 .done .acts{margin-top:8px}
+.aviso{background:var(--navy);color:#fff;font-size:15px;font-weight:500;text-align:center;padding:10px 0;position:relative;z-index:31}
+.aviso.previa{background:#8A4B12}
+.precio{font-size:14px;font-weight:700;color:var(--navy);background:var(--sky-soft);padding:4px 10px;border-radius:999px}
 .code{display:flex;flex-direction:column;gap:2px;padding:14px 20px;border-radius:14px;background:var(--sky-soft)}
 .code small{font-size:13.5px;color:var(--muted)}
 .code b{font-family:var(--display);font-size:30px;letter-spacing:.12em;color:var(--navy);font-variant-numeric:tabular-nums}
@@ -545,8 +548,11 @@ footer .legal{border-top:1px solid rgba(255,255,255,.14);padding-block:18px;font
 </div>
 <script src="conexion.js"></script>
 <script>
+var VISTA_PREVIA = /[?&]preview=1/.test(location.search);
 (window.conectar ? window.conectar() : Promise.resolve(null)).then(function(db){
+  if (VISTA_PREVIA) { try { var vp = JSON.parse(sessionStorage.getItem("vista_previa") || "null"); if (vp && vp.tratamientos) Object.assign(window.CONFIG, vp); } catch (e) {} }
   if (!db) return null;
+  if (VISTA_PREVIA) return db;
   return db.from("config").select("datos").eq("id", 1).single().then(function(r){
     if (r.data && r.data.datos && r.data.datos.tratamientos) Object.assign(window.CONFIG, r.data.datos);
     return db;
@@ -557,6 +563,7 @@ var C = window.CONFIG;
 /* Con base de datos configurada pero sin conexión, no se muestran horas inventadas */
 var SIN_CONEXION = !!window.SUPABASE_URL && !DB;
 C.profesionales = C.profesionales.filter(function(p){ return p.activo !== false; });
+C.tratamientos = C.tratamientos.filter(function(t){ return t.activo !== false; });
 var $ = function(s, r){ return (r||document).querySelector(s); };
 var $$ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
 var DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
@@ -587,38 +594,68 @@ function largo(iso){ var d = fecha(iso); return DIAS[d.getUTCDay()] + " " + d.ge
 function corto(iso){ var d = fecha(iso); return DIAS_C[d.getUTCDay()] + " " + d.getUTCDate() + " " + MESES_C[d.getUTCMonth()]; }
 function aMin(h){ var a = h.split(":"); return +a[0] * 60 + +a[1]; }
 function aHora(m){ return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
-function bloque(iso){ var d = dow(iso); return C.horario.filter(function(b){ return b.dias.indexOf(d) >= 0; })[0] || null; }
+var R = Object.assign({ intervalo: 30, anticipacion_min: 60, ventana_dias: 60, max_futuras: 3, cancelar_hasta_horas: 2 }, C.reglas || {});
+["intervalo", "anticipacion_min", "ventana_dias", "max_futuras", "cancelar_hasta_horas"].forEach(function(k){ R[k] = +R[k] || 0; });
+if (R.intervalo < 5) R.intervalo = 30;
+function bloqueEn(horario, iso){ var d = dow(iso); return (horario || []).filter(function(b){ return (b.dias || []).indexOf(d) >= 0; })[0] || null; }
+function bloque(iso){ return bloqueEn(C.horario, iso); }
+function horarioDe(p){ return p && p.horario && p.horario.length ? p.horario : C.horario; }
+function bloqueProf(p, iso){ return bloqueEn(horarioDe(p), iso); }
 
 var HOY = ahoraChile();
 var ABIERTOS = [];
-for (var i = 0; ABIERTOS.length < 20 && i < 60; i++) { var di = isoMas(HOY.iso, i); if (bloque(di)) ABIERTOS.push(di); }
+for (var i = 0; i <= Math.min(R.ventana_dias || 60, 180); i++) {
+  var di = isoMas(HOY.iso, i);
+  if (C.profesionales.some(function(p){ return bloqueProf(p, di); })) ABIERTOS.push(di);
+}
+if (!ABIERTOS.length) ABIERTOS.push(HOY.iso);
 
-/* Horas de ejemplo: fijas para cada profesional y día, hasta conectar la agenda real. */
-function hash(s){ var h = 2166136261; for (var k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619); } return h >>> 0; }
-function grilla(iso){
-  var b = bloque(iso), out = []; if (!b) return out;
-  for (var m = aMin(b.abre); m + 30 <= aMin(b.cierra); m += 30) {
-    if (b.pausa && m >= aMin(b.pausa[0]) && m < aMin(b.pausa[1])) continue;
+function durTrat(t){ return +(t && t.duracion) || R.intervalo; }
+/* Horas de inicio posibles: cada "intervalo" desde que abre, sin pasar el cierre ni cruzar la pausa */
+function grilla(iso, p, dur){
+  var b = bloqueProf(p, iso), out = []; if (!b) return out;
+  dur = dur || R.intervalo;
+  for (var m = aMin(b.abre); m + dur <= aMin(b.cierra); m += R.intervalo) {
+    if (b.pausa && m < aMin(b.pausa[1]) && m + dur > aMin(b.pausa[0])) continue;
     out.push(aHora(m));
   }
   return out;
 }
-var OCUP = {};
+/* Horas de ejemplo (sin base de datos): fijas para cada profesional y día */
+function hash(s){ var h = 2166136261; for (var k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619); } return h >>> 0; }
+var OCUP = [], BLOQ = [];
 function cargarOcupadas(){
-  if (!DB) return Promise.resolve();
-  return DB.rpc("horas_ocupadas", { desde: ABIERTOS[0], hasta: ABIERTOS[ABIERTOS.length - 1] }).then(function(r){
-    if (r.error) return;
-    OCUP = {}; (r.data || []).forEach(function(x){ OCUP[x.profesional_id + "|" + x.fecha + "|" + String(x.hora).slice(0, 5)] = 1; });
+  if (!DB || VISTA_PREVIA) return Promise.resolve();
+  var desde = ABIERTOS[0], hasta = ABIERTOS[ABIERTOS.length - 1];
+  return DB.rpc("disponibilidad", { desde: desde, hasta: hasta }).then(function(r){
+    if (!r.error) {
+      OCUP = (r.data.ocupadas || []).map(function(x){ var ini = aMin(x.h); return { p: x.p, f: x.f, i: ini, t: ini + (+x.d || 30) }; });
+      BLOQ = (r.data.bloqueos || []).map(function(x){ return { p: x.p, i: String(x.i).slice(0, 16).replace(" ", "T"), f: String(x.f).slice(0, 16).replace(" ", "T") }; });
+      return;
+    }
+    /* Base de datos sin la actualización 02: usa la función anterior */
+    return DB.rpc("horas_ocupadas", { desde: desde, hasta: hasta }).then(function(r2){
+      if (r2.error) return;
+      OCUP = (r2.data || []).map(function(x){ var ini = aMin(String(x.hora).slice(0, 5)); return { p: x.profesional_id, f: x.fecha, i: ini, t: ini + 30 }; });
+    });
   }, function(){});
 }
-function libre(profId, iso, hora){
-  if (iso === HOY.iso && aMin(hora) <= HOY.min + 60) return false;
-  if (DB) return !OCUP[profId + "|" + iso + "|" + hora];
+function libre(profId, iso, hora, dur){
+  var ini = aMin(hora), fin = ini + (dur || R.intervalo);
+  if (iso < HOY.iso || (iso === HOY.iso && ini < HOY.min + R.anticipacion_min)) return false;
+  if (DB && !VISTA_PREVIA) {
+    if (OCUP.some(function(o){ return o.p === profId && o.f === iso && o.i < fin && o.t > ini; })) return false;
+    var a = iso + "T" + hora, z = iso + "T" + aHora(Math.min(fin, 1439));
+    return !BLOQ.some(function(b){ return (!b.p || b.p === profId) && b.i < z && b.f > a; });
+  }
   return hash(profId + iso + hora) % 5 > 2;
 }
-function profsDe(tratId){ return C.profesionales.filter(function(p){ return p.tratamientos.indexOf(tratId) >= 0; }); }
-function candidatos(){ return S.prof === "any" ? profsDe(S.trat) : C.profesionales.filter(function(p){ return p.id === S.prof; }); }
-function horasLibres(profs, iso){ return grilla(iso).filter(function(h){ return profs.some(function(p){ return libre(p.id, iso, h); }); }); }
+function profsDe(tratId){ return C.profesionales.filter(function(p){ return (p.tratamientos || []).indexOf(tratId) >= 0; }); }
+function horasDe(p, iso){ var d = durTrat(trat()); return grilla(iso, p, d).filter(function(h){ return libre(p.id, iso, h, d); }); }
+function horasLibres(profs, iso){
+  var set = {}; profs.forEach(function(p){ horasDe(p, iso).forEach(function(h){ set[h] = 1; }); });
+  return Object.keys(set).sort();
+}
 function proxima(profs){
   for (var k = 0; k < ABIERTOS.length; k++) { var hs = horasLibres(profs, ABIERTOS[k]); if (hs.length) return { iso: ABIERTOS[k], hora: hs[0] }; }
   return null;
@@ -690,7 +727,6 @@ function mensaje(){
 }
 
 /* ---------- Horas ---------- */
-function horasDe(p, iso){ return grilla(iso).filter(function(h){ return libre(p.id, iso, h); }); }
 function candidatos(){ return S.prof === "any" ? profsDe(S.trat) : [profPorId(S.prof)]; }
 function primerDiaConHoras(){
   var n = proxima(candidatos()); return n ? n.iso : ABIERTOS[0];
@@ -725,7 +761,7 @@ function pasoEspecialidad(){
   var e = errores(2), html = '<h3 class="q" id="q" tabindex="-1">¿Qué especialidad necesita?</h3><p class="qs">Elija el tratamiento y, si quiere, a su profesional.</p>';
   html += '<div class="tiles" role="group" aria-label="Especialidad">' + C.tratamientos.map(function(t){
     return '<button type="button" class="tile" data-t="' + t.id + '" aria-pressed="' + (S.trat === t.id) + '"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      (ICONOS[t.id] || ICONOS.restauraciones) + '</svg></span><span><b>' + esc(t.nombre) + "</b><small>" + esc(t.texto) + "</small></span></button>"; }).join("") + "</div>";
+      (ICONOS[t.id] || ICONOS.restauraciones) + '</svg></span><span><b>' + esc(t.nombre) + "</b><small>" + esc(t.texto) + " · " + durTrat(t) + " min</small></span></button>"; }).join("") + "</div>";
   if (e.trat && S.intento[2]) html += '<p class="err" role="alert">' + e.trat + "</p>";
   if (S.trat) {
     html += '<div class="field"><label for="prof">Profesional</label><div class="sel"><select id="prof"><option value="any">Cualquier profesional</option>' +
@@ -745,7 +781,7 @@ function diasHtml(){
     '</div><button type="button" class="arrow" data-pag="1" aria-label="Días siguientes"' + (S.pag === maxPag ? " disabled" : "") + ">" + ICON_SIG + "</button></div>";
 }
 function pasoHora(){
-  var html = '<h3 class="q" id="q" tabindex="-1">' + (CON_AGENDA ? "Elija el día" : "Elija profesional y hora") + '</h3><p class="qs">' + esc(trat().nombre) + " · " + esc(cap(largo(S.fecha))) + "</p>" + diasHtml();
+  var html = '<h3 class="q" id="q" tabindex="-1">' + (CON_AGENDA ? "Elija el día" : "Elija profesional y hora") + '</h3><p class="qs">' + esc(trat().nombre) + " (" + durTrat(trat()) + " min) · " + esc(cap(largo(S.fecha))) + "</p>" + diasHtml();
   if (CON_AGENDA) return html + '<p class="fine">Las horas disponibles de ese día se muestran en la agenda de la clínica al confirmar.</p>';
   html += '<div class="docs">' + candidatos().map(function(p){
     var hs = horasDe(p, S.fecha), todas = S.mas[p.id] || hs.length <= HORAS_VISIBLES, vis = todas ? hs : hs.slice(0, HORAS_VISIBLES), hrs;
@@ -864,7 +900,7 @@ function siguiente(){
   }
   if (S.paso === 1) registrar("inicio_reserva", true);
   if (S.paso === 3 && DB) return cargarOcupadas().then(function(){
-    if (S.hora && !libre(S.horaProf, S.fecha, S.hora)) { S.aviso = "Esa hora se acaba de tomar. Elija otra, por favor."; S.hora = null; S.horaProf = null; return pintar(false); }
+    if (S.hora && !libre(S.horaProf, S.fecha, S.hora, durTrat(trat()))) { S.aviso = "Esa hora se acaba de tomar. Elija otra, por favor."; S.hora = null; S.horaProf = null; return pintar(false); }
     S.aviso = ""; ir(4);
   });
   if (S.paso === 1 && S.saltar && S.trat) { S.saltar = false; return ir(3); }
@@ -877,6 +913,7 @@ function siguiente(){
 
 function guardarReserva(){
   if (S.enviando) return;
+  if (VISTA_PREVIA) { S.errorEnvio = "Vista previa: aquí no se guardan reservas."; return pintar(false); }
   S.enviando = true; S.errorEnvio = ""; pintarPie();
   DB.rpc("reservar", { p: { fecha: S.fecha, hora: S.hora, profesional_id: S.horaProf, tratamiento_id: S.trat, doc_tipo: S.doc === "rut" ? "rut" : "pasaporte",
     doc: S.doc === "rut" ? S.rut : S.pas, nombre: S.nombre, telefono: S.fono, correo: S.mail, prevision: S.prev } }).then(function(r){
@@ -884,8 +921,9 @@ function guardarReserva(){
     if (r.error) {
       var m = r.error.message || "";
       if (/ocupada/.test(m)) { S.hora = null; S.horaProf = null; return cargarOcupadas().then(function(){ ir(3); S.aviso = "Esa hora se acaba de tomar. Elija otra, por favor."; pintar(false); }); }
-      S.errorEnvio = /limite: el paciente/.test(m) ? "Este paciente ya tiene 3 horas reservadas. Para otra, escríbanos." :
+      S.errorEnvio = /limite: el paciente/.test(m) ? "Este paciente ya tiene " + R.max_futuras + " horas reservadas. Para otra, escríbanos." :
                      /limite/.test(m) ? "Hay muchas reservas en este momento. Intente de nuevo en un minuto." :
+                     /muy próxima|muy lejana|fuera de horario/.test(m) ? "Esa hora ya no está disponible. Elija otra, por favor." :
                      /datos_invalidos/.test(m) ? "Revise los datos: algo no calza (" + m.replace(/^.*datos_invalidos:\s*/, "") + ")." :
                      "No pudimos guardar la reserva. Revise su conexión e intente de nuevo.";
       return pintar(false);
@@ -896,7 +934,7 @@ function guardarReserva(){
 }
 /* Estadísticas: solo cuenta eventos, sin datos personales */
 function registrar(evento, unaVez){
-  if (!DB) return;
+  if (!DB || VISTA_PREVIA) return;
   try { if (unaVez) { if (sessionStorage.getItem("ev_" + evento)) return; sessionStorage.setItem("ev_" + evento, "1"); } } catch (e) {}
   var origen = ""; try { origen = document.referrer ? new URL(document.referrer).hostname : ""; } catch (e) {}
   if (origen === location.hostname) origen = "";
@@ -965,6 +1003,28 @@ $$("[data-stars]").forEach(function(el){ el.innerHTML = new Array(6).join(estrel
 $("#anio").textContent = HOY.iso.slice(0, 4);
 if (C.telefono) { $("#tel").hidden = false; $("#tel").textContent = "Teléfono: " + C.telefono; }
 if (C.demo) $("#demo").hidden = false;
+/* Secciones que la clínica puede ocultar desde el panel */
+var SEC = C.secciones || {};
+["tratamientos", "clinica", "resenas", "ubicacion", "preguntas"].forEach(function(id){
+  if (SEC[id] === false) { var s = $("#" + id); if (s) s.hidden = true; $$('a[href="#' + id + '"]').forEach(function(a){ var li = a.closest("li"); (li || a).hidden = true; }); }
+});
+if (SEC.resenas === false) $$(".rating, .facts li:first-child").forEach(function(el){ el.hidden = true; });
+/* Preguntas frecuentes */
+if (C.faq && C.faq.length) {
+  $(".faq").innerHTML = C.faq.filter(function(x){ return x && x.q; }).map(function(x){ return "<details><summary>" + esc(x.q) + "</summary><p>" + esc(x.a || "") + "</p></details>"; }).join("");
+}
+/* Aviso destacado arriba de la página (feriados, vacaciones, promociones) */
+if (C.aviso && C.aviso.activo && C.aviso.texto) {
+  var av = document.createElement("div"); av.className = "aviso"; av.setAttribute("role", "status");
+  av.innerHTML = '<div class="wrap">' + esc(C.aviso.texto) + "</div>";
+  document.body.insertBefore(av, document.body.firstChild);
+}
+/* Título y descripción para Google */
+if (C.seo) {
+  if (C.seo.titulo) document.title = C.seo.titulo;
+  if (C.seo.descripcion) { var md = document.querySelector('meta[name="description"]'); if (md) md.setAttribute("content", C.seo.descripcion); }
+}
+if (VISTA_PREVIA) { var vb = document.createElement("div"); vb.className = "aviso previa"; vb.innerHTML = '<div class="wrap">Vista previa: así se verá la página. Las reservas están desactivadas.</div>'; document.body.insertBefore(vb, document.body.firstChild); }
 if (C.textos) { if (C.textos.titulo) $("#h-titulo").textContent = C.textos.titulo; if (C.textos.subtitulo) $("#h-sub").textContent = C.textos.subtitulo; }
 var IMG = C.imagenes || {}, cssUrl = function(u){ return 'url("' + String(u).replace(/["\\\n]/g, "") + '")'; };
 if (IMG.portada) document.documentElement.style.setProperty("--foto", cssUrl(IMG.portada));
@@ -972,9 +1032,9 @@ if (IMG.clinica) $("#img-clinica").src = IMG.clinica;
 if (IMG.resenas) $("#resenas").style.backgroundImage = cssUrl(IMG.resenas);
 if (DB) {
   $$("[data-wa-cambio], [data-wa-anula]").forEach(function(a){ a.href = "mi-reserva.html"; a.removeAttribute("target"); });
-  $("#faq-cambio").textContent = "Sí. Entre a “Mi reserva” con su código y su RUT, y anule la hora. Para cambiarla, anúlela y reserve otra.";
+  if ($("#faq-cambio")) $("#faq-cambio").textContent = "Sí. Entre a “Mi reserva” con su código y su RUT, y anule la hora. Para cambiarla, anúlela y reserve otra.";
 }
-$("#faq-confirma").textContent = CON_AGENDA
+if ($("#faq-confirma")) $("#faq-confirma").textContent = CON_AGENDA
   ? "Ingrese su RUT, elija especialidad, profesional y día. Después pasa a la agenda en línea de la clínica, donde elige la hora y recibe la confirmación."
   : DB ? "Ingrese su RUT, elija especialidad, profesional y hora, y confirme. La hora queda guardada al instante y recibe un código para revisarla o anularla."
   : "Ingrese su RUT, elija especialidad, profesional y hora. Al confirmar se abre WhatsApp con su solicitud escrita; envíela y la clínica le responde confirmando la hora.";
@@ -991,7 +1051,8 @@ $("#faq-confirma").textContent = CON_AGENDA
   if (on) p.textContent = "Abierto ahora, hasta las " + (b.pausa && HOY.min < aMin(b.pausa[0]) ? b.pausa[0] : b.cierra);
   else if (enPausa) p.textContent = "Cerrado ahora, abre a las " + b.pausa[1];
   else if (b && HOY.min < aMin(b.abre)) p.textContent = "Cerrado ahora, abre a las " + b.abre;
-  else { var sig = ABIERTOS[0] === HOY.iso ? ABIERTOS[1] : ABIERTOS[0]; p.textContent = "Cerrado ahora, abre el " + DIAS[dow(sig)] + " a las " + bloque(sig).abre; }
+  else { var sig = null; for (var k = 1; k < 15 && !sig; k++) if (bloque(isoMas(HOY.iso, k))) sig = isoMas(HOY.iso, k);
+         p.textContent = sig ? "Cerrado ahora, abre el " + DIAS[dow(sig)] + " a las " + bloque(sig).abre : "Cerrado ahora"; }
 })();
 
 /* Mapa incrustado: solo en el sitio propio */
@@ -1011,7 +1072,7 @@ var ICONOS = {
   urgencia: '<path d="M13 2.500L5 13.500h6l-1 8 8-11h-6z"/>'
 };
 $("#cards").innerHTML = C.tratamientos.map(function(t){
-  return '<button type="button" class="card" data-reservar="' + t.id + '"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONOS[t.id] || ICONOS.restauraciones) + '</svg></span><span class="tx"><h3>' + esc(t.nombre) + "</h3><p>" + esc(t.largo || t.texto) + '</p></span><span class="go">Reservar<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
+  return '<button type="button" class="card" data-reservar="' + t.id + '"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONOS[t.id] || ICONOS.restauraciones) + '</svg></span><span class="tx"><h3>' + esc(t.nombre) + "</h3><p>" + esc(t.largo || t.texto) + "</p>" + (t.precio ? '<span class="precio">' + esc(t.precio) + "</span>" : "") + '</span><span class="go">Reservar<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
 }).join("");
 $("#cards").addEventListener("click", function(ev){ var b = ev.target.closest("[data-reservar]"); if (b) { elegirTrat(b.dataset.reservar); S.saltar = true; ir(vacio(errores(1)) ? 3 : 1); irReserva(); } });
 $$("[data-dir-corta]").forEach(function(el){ el.textContent = C.direccion.split(",")[0]; });

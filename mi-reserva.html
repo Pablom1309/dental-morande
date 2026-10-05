@@ -83,7 +83,8 @@ function hoyChile(){ try { return new Intl.DateTimeFormat("en-CA", { timeZone: "
 
 var S = { doc: "rut", codigo: "", valor: "", res: null, error: "", aviso: "", seguro: false, cargando: false };
 try { var q = new URLSearchParams(location.search).get("c"); if (q) S.codigo = q.toUpperCase().slice(0, 12); } catch (e) {}
-var DB = null, WA = "";
+var DB = null, WA = "", HORAS_ANULAR = 2;
+function ahoraChileISO(){ try { var p = {}; new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()).forEach(function(x){ p[x.type] = x.value; }); return p.year + "-" + p.month + "-" + p.day + "T" + (p.hour === "24" ? "00" : p.hour) + ":" + p.minute; } catch (e) { return new Date().toISOString().slice(0, 16); } }
 
 function formulario(){
   return '<form id="buscar" novalidate style="display:flex;flex-direction:column;gap:18px">' +
@@ -95,7 +96,9 @@ function formulario(){
     '<p class="fine">¿Perdió su código? ' + (WA ? '<a href="https://wa.me/' + esc(WA) + '" target="_blank" rel="noopener">Escríbanos por WhatsApp</a>.' : "Comuníquese con la clínica.") + "</p></form>";
 }
 function detalle(){
-  var r = S.res, activa = (r.estado === "pendiente" || r.estado === "confirmada") && r.fecha >= hoyChile();
+  var r = S.res, vigente = (r.estado === "pendiente" || r.estado === "confirmada") && r.fecha >= hoyChile();
+  var limite = new Date(Date.parse(r.fecha + "T" + String(r.hora).slice(0, 5) + ":00Z") - HORAS_ANULAR * 3600000).toISOString().slice(0, 16);
+  var activa = vigente && ahoraChileISO() <= limite;
   var html = '<span class="pill ' + esc(r.estado) + '">' + esc(ESTADOS[r.estado] || r.estado) + "</span>" +
     '<p class="when">' + esc(largo(r.fecha)) + ", " + esc(String(r.hora).slice(0, 5)) + "</p>" +
     "<dl><dt>Paciente</dt><dd>" + esc(r.paciente_nombre) + "</dd><dt>Tratamiento</dt><dd>" + esc(r.tratamiento) + "</dd><dt>Profesional</dt><dd>" + esc(r.profesional) +
@@ -104,6 +107,7 @@ function detalle(){
   if (S.error) html += '<p class="msg bad" role="alert">' + esc(S.error) + "</p>";
   if (activa && !S.seguro) html += '<div class="acts"><button type="button" class="btn line" id="anular">Anular esta hora</button><a class="btn line" href="mi-reserva.html">Buscar otra</a></div>';
   else if (activa) html += '<p><b>¿Seguro que quiere anular su hora?</b> La hora queda libre para otro paciente.</p><div class="acts"><button type="button" class="btn danger" id="si"' + (S.cargando ? ' aria-busy="true"' : "") + ">" + (S.cargando ? "Anulando…" : "Sí, anular") + '</button><button type="button" class="btn line" id="no">No, mantener</button></div>';
+  else if (vigente) html += '<p class="fine">Las horas se pueden anular en línea hasta ' + HORAS_ANULAR + (HORAS_ANULAR === 1 ? " hora" : " horas") + ' antes. Para anularla ahora, comuníquese con la clínica' + (WA ? ': <a href="https://wa.me/' + esc(WA) + '" target="_blank" rel="noopener">WhatsApp</a>' : "") + ".</p>";
   else html += '<div class="acts"><a class="btn" href="index.html#reserva">Reservar otra hora</a></div>';
   return html;
 }
@@ -127,7 +131,7 @@ function anular(){
   S.cargando = true; S.error = ""; pintar();
   DB.rpc("cancelar_reserva", { cod: S.res.codigo, doc: S.valor }).then(function(r){
     S.cargando = false; S.seguro = false;
-    if (r.error || !r.data) { S.error = "No se pudo anular. Puede que la hora ya haya pasado o esté anulada."; return pintar(); }
+    if (r.error || !r.data) { S.error = "No se pudo anular en línea. Se puede hasta " + HORAS_ANULAR + " horas antes; después, comuníquese con la clínica."; return pintar(); }
     S.res.estado = "cancelada"; S.aviso = "Su hora fue anulada."; pintar();
   }, function(){ S.cargando = false; S.error = "No pudimos conectarnos. Intente de nuevo."; pintar(); });
 }
@@ -147,7 +151,9 @@ window.conectar().then(function(db){
   db.from("config").select("datos").eq("id", 1).single().then(function(r){
     var d = r.data && r.data.datos || {};
     if (d.nombre) { document.querySelectorAll("[data-nombre]").forEach(function(el){ el.textContent = d.nombre; }); document.title = "Mi reserva | " + d.nombre; }
-    WA = (d.whatsapp || "").replace(/\D/g, ""); pintar();
+    WA = (d.whatsapp || "").replace(/\D/g, "");
+    if (d.reglas && d.reglas.cancelar_hasta_horas != null && d.reglas.cancelar_hasta_horas !== "") HORAS_ANULAR = +d.reglas.cancelar_hasta_horas;
+    pintar();
   }, function(){ pintar(); });
   pintar(S.codigo ? "#doc" : "#codigo");
 });
