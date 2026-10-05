@@ -554,6 +554,8 @@ footer .legal{border-top:1px solid rgba(255,255,255,.14);padding-block:18px;font
 }).catch(function(){ return null; }).then(function(DB){
 "use strict";
 var C = window.CONFIG;
+/* Con base de datos configurada pero sin conexión, no se muestran horas inventadas */
+var SIN_CONEXION = !!window.SUPABASE_URL && !DB;
 C.profesionales = C.profesionales.filter(function(p){ return p.activo !== false; });
 var $ = function(s, r){ return (r||document).querySelector(s); };
 var $$ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
@@ -817,6 +819,12 @@ function pintarPie(){
 }
 function pintar(enfocar){
   var body = $("#ag-body");
+  if (SIN_CONEXION) {
+    body.innerHTML = '<div class="done"><h3 class="q" id="q" tabindex="-1">No pudimos cargar la agenda</h3><p>Revise su conexión a internet y vuelva a intentarlo.</p>' +
+      '<div class="acts"><button type="button" class="btn" data-recargar>Reintentar</button>' + (C.whatsapp ? '<a class="btn line" target="_blank" rel="noopener" href="' + esc(waUrl("Hola, quiero reservar una hora en " + C.nombre + ".")) + '">Reservar por WhatsApp</a>' : "") + "</div></div>";
+    $("#ag-foot").hidden = true; $("#steps").innerHTML = ""; $("#sum").hidden = true;
+    return;
+  }
   body.innerHTML = S.listo ? pasoListo() : [pasoPaciente, pasoEspecialidad, pasoHora, pasoConfirmar][S.paso - 1]();
   pintarPasos(); pintarResumen(); pintarPie();
   if (enfocar) {
@@ -900,6 +908,7 @@ $("#next").addEventListener("click", siguiente);
 $("#back").addEventListener("click", function(){ if (S.paso > 1) ir(S.paso - 1); });
 $("#ag-body").addEventListener("click", function(ev){
   var b = ev.target.closest("button"); if (!b) return;
+  if (b.hasAttribute("data-recargar")) return location.reload();
   if (b.hasAttribute("data-swap")) { S.doc = S.doc === "rut" ? "pas" : "rut"; S.toco = {}; pintar(false); var i = $("#" + S.doc); if (i) i.focus(); return; }
   if (b.dataset.prev) { S.prev = b.dataset.prev; return pintar(false); }
   if (b.dataset.t) { elegirTrat(b.dataset.t); pintar(false); var t = $('[data-t="' + b.dataset.t + '"]'); if (t) t.focus(); return; }

@@ -549,7 +549,7 @@ window.addEventListener("beforeunload", function(ev){ if (sucio) { ev.preventDef
 /* ---------- Inicio ---------- */
 window.conectar().then(function(db){
   DB = db;
-  if (!db) return vista("v-off");
+  if (!db) { if (window.SUPABASE_URL) { $("#v-off h1").textContent = "No pudimos conectarnos"; $("#v-off p").textContent = "Revise su conexión a internet y recargue la página."; } return vista("v-off"); }
   db.auth.getSession().then(function(r){ if (r.data && r.data.session) entrar(); else vista("v-login"); });
 });
 })();

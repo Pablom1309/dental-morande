@@ -108,7 +108,7 @@ function detalle(){
   return html;
 }
 function pintar(foco){
-  $("#card").innerHTML = !DB ? '<p>Las reservas en línea todavía no están activas.</p><p class="fine">Para revisar o cambiar su hora, comuníquese con la clínica.</p><div class="acts"><a class="btn" href="index.html">Volver al inicio</a></div>'
+  $("#card").innerHTML = !DB ? (window.SUPABASE_URL ? '<p>No pudimos conectarnos. Revise su conexión a internet.</p><div class="acts"><button type="button" class="btn" onclick="location.reload()">Reintentar</button></div>' : '<p>Las reservas en línea todavía no están activas.</p><p class="fine">Para revisar o cambiar su hora, comuníquese con la clínica.</p><div class="acts"><a class="btn" href="index.html">Volver al inicio</a></div>')
                        : S.res ? detalle() : formulario();
   if (foco) { var el = $(foco); if (el) el.focus(); }
 }
