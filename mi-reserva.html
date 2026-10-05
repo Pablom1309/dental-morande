@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi reserva | Dental Clinic Morande</title>
+<meta name="description" content="Revise o anule su hora con su código de reserva y su RUT.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0A1F3C">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%230B63CE' d='M7.5 2C4.6 2 3 4.2 3 7c0 2.4.9 3.7 1.4 6.3.5 2.7.6 8.7 2.9 8.7 1.9 0 1.6-5.5 4.7-5.5s2.8 5.5 4.7 5.5c2.3 0 2.4-6 2.9-8.7C20.1 10.7 21 9.4 21 7c0-2.8-1.6-5-4.5-5-1.9 0-2.9 1-4.5 1s-2.6-1-4.5-1z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{--navy:#0A1F3C;--ink:#10243F;--blue:#0B63CE;--blue-d:#084C9E;--sky:#38BDF8;--sky-soft:#E8F3FC;--bg:#F5F9FD;--surface:#FFFFFF;--line:#DAE4EF;--muted:#566880;
+  --ok:#177A4C;--ok-bg:#E6F4EC;--off:#8A4B12;--off-bg:#FBEFE3;--err:#B3261E;--err-bg:#FCEBEA;
+  --display:"Plus Jakarta Sans","DM Sans",system-ui,sans-serif;--body:"DM Sans",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100dvh;display:flex;flex-direction:column}
+h1,h2,p{margin:0}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+header{background:var(--navy);color:#fff}
+header .in{max-width:640px;margin:0 auto;padding:18px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;color:#fff;text-decoration:none}
+.logo svg{width:26px;height:26px;color:var(--sky)}
+header a.back{color:rgba(255,255,255,.85);font-size:15px;text-decoration:none}
+header a.back:hover{color:#fff;text-decoration:underline}
+main{flex:1;width:100%;max-width:640px;margin:0 auto;padding:40px 16px 64px}
+h1{font-family:var(--display);font-size:clamp(28px,6vw,38px);line-height:1.1;letter-spacing:-.025em;color:var(--navy)}
+.lead{color:var(--muted);margin-top:8px}
+.card{background:var(--surface);border-radius:24px;padding:32px;margin-top:28px;box-shadow:0 1px 0 var(--line),0 24px 60px -36px rgba(10,31,60,.35);display:flex;flex-direction:column;gap:20px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:15px;font-weight:700}
+.field input{min-height:52px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 16px;font-size:17px;width:100%;outline:none}
+.field input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(11,99,206,.12)}
+#codigo{text-transform:uppercase;letter-spacing:.12em;font-weight:700}
+.swap{align-self:flex-start;border:0;background:none;padding:4px 0;color:var(--blue);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border-radius:999px;border:0;font-weight:700;font-size:16px;text-decoration:none;cursor:pointer;background:var(--blue);color:#fff;transition:background-color .15s ease,transform .16s cubic-bezier(.23,1,.32,1)}
+.btn:active{transform:scale(.97)}
+.btn.line{background:var(--surface);color:var(--navy);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.danger{background:var(--err)}
+.btn[aria-busy="true"]{opacity:.7;cursor:progress}
+@media (hover:hover) and (pointer:fine){.btn:hover{background:var(--blue-d)}.btn.line:hover{background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--navy)}.btn.danger:hover{background:#8F1E18}}
+.acts{display:flex;flex-wrap:wrap;gap:10px}
+.msg{padding:14px 16px;border-radius:12px;font-size:15.5px}
+.msg.bad{background:var(--err-bg);color:var(--err)}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.pill{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700;padding:6px 14px;border-radius:999px}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.pendiente{background:var(--off-bg);color:var(--off)}
+.pill.confirmada,.pill.atendida{background:var(--ok-bg);color:var(--ok)}
+.pill.cancelada,.pill.no_asistio{background:var(--err-bg);color:var(--err)}
+dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr)}
+dt,dd{padding:12px 0;border-top:1px solid var(--line)}
+dt{color:var(--muted);font-size:15px;padding-right:20px}
+dd{margin:0;font-weight:700;color:var(--navy)}
+.when{font-family:var(--display);font-size:24px;line-height:1.2;color:var(--navy)}
+.fine{font-size:14px;color:var(--muted)}
+@media (max-width:480px){.card{padding:22px}.acts .btn{flex:1}}
+@media (prefers-reduced-motion:reduce){.btn{transition:none}.btn:active{transform:none}}
+</style>
+</head>
+<body>
+<header><div class="in">
+  <a class="logo" href="index.html"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 2C4.6 2 3 4.2 3 7c0 2.4.9 3.7 1.4 6.3.5 2.7.6 8.7 2.9 8.7 1.9 0 1.6-5.5 4.7-5.5s2.8 5.5 4.7 5.5c2.3 0 2.4-6 2.9-8.7C20.1 10.7 21 9.4 21 7c0-2.8-1.6-5-4.5-5-1.9 0-2.9 1-4.5 1s-2.6-1-4.5-1z"/></svg><span data-nombre>Dental Clinic Morande</span></a>
+  <a class="back" href="index.html#reserva">Reservar hora</a>
+</div></header>
+<main>
+  <h1>Mi reserva</h1>
+  <p class="lead">Revise o anule su hora con el código que recibió al reservar.</p>
+  <div class="card" id="card"></div>
+</main>
+<script src="conexion.js"></script>
+<script>
+(function(){
+"use strict";
+var $ = function(s){ return document.querySelector(s); };
+var esc = function(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); };
+var DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+var MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+var ESTADOS = { pendiente: "Reservada", confirmada: "Confirmada por la clínica", atendida: "Atendida", no_asistio: "No asistió", cancelada: "Anulada" };
+function largo(iso){ var a = iso.split("-"), d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2], 12)); var t = DIAS[d.getUTCDay()] + " " + d.getUTCDate() + " de " + MESES[d.getUTCMonth()]; return t.charAt(0).toUpperCase() + t.slice(1); }
+function hoyChile(){ try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+
+var S = { doc: "rut", codigo: "", valor: "", res: null, error: "", aviso: "", seguro: false, cargando: false };
+try { var q = new URLSearchParams(location.search).get("c"); if (q) S.codigo = q.toUpperCase().slice(0, 12); } catch (e) {}
+var DB = null, WA = "";
+
+function formulario(){
+  return '<form id="buscar" novalidate style="display:flex;flex-direction:column;gap:18px">' +
+    '<div class="field"><label for="codigo">Código de reserva</label><input id="codigo" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABC123" value="' + esc(S.codigo) + '"></div>' +
+    '<div class="field"><label for="doc">' + (S.doc === "rut" ? "RUT del paciente" : "N° de pasaporte") + '</label><input id="doc" autocomplete="off" ' + (S.doc === "rut" ? 'placeholder="12.345.678-9"' : "") + ' value="' + esc(S.valor) + '"></div>' +
+    '<button type="button" class="swap" id="swap">' + (S.doc === "rut" ? "Reservé con pasaporte" : "Reservé con RUT") + "</button>" +
+    (S.error ? '<p class="msg bad" role="alert">' + esc(S.error) + "</p>" : "") +
+    '<div class="acts"><button class="btn" type="submit"' + (S.cargando ? ' aria-busy="true"' : "") + ">" + (S.cargando ? "Buscando…" : "Ver mi reserva") + "</button></div>" +
+    '<p class="fine">¿Perdió su código? ' + (WA ? '<a href="https://wa.me/' + esc(WA) + '" target="_blank" rel="noopener">Escríbanos por WhatsApp</a>.' : "Comuníquese con la clínica.") + "</p></form>";
+}
+function detalle(){
+  var r = S.res, activa = (r.estado === "pendiente" || r.estado === "confirmada") && r.fecha >= hoyChile();
+  var html = '<span class="pill ' + esc(r.estado) + '">' + esc(ESTADOS[r.estado] || r.estado) + "</span>" +
+    '<p class="when">' + esc(largo(r.fecha)) + ", " + esc(String(r.hora).slice(0, 5)) + "</p>" +
+    "<dl><dt>Paciente</dt><dd>" + esc(r.paciente_nombre) + "</dd><dt>Tratamiento</dt><dd>" + esc(r.tratamiento) + "</dd><dt>Profesional</dt><dd>" + esc(r.profesional) +
+    "</dd><dt>Código</dt><dd>" + esc(r.codigo) + "</dd></dl>";
+  if (S.aviso) html += '<p class="msg ok" role="status">' + esc(S.aviso) + "</p>";
+  if (S.error) html += '<p class="msg bad" role="alert">' + esc(S.error) + "</p>";
+  if (activa && !S.seguro) html += '<div class="acts"><button type="button" class="btn line" id="anular">Anular esta hora</button><a class="btn line" href="mi-reserva.html">Buscar otra</a></div>';
+  else if (activa) html += '<p><b>¿Seguro que quiere anular su hora?</b> La hora queda libre para otro paciente.</p><div class="acts"><button type="button" class="btn danger" id="si"' + (S.cargando ? ' aria-busy="true"' : "") + ">" + (S.cargando ? "Anulando…" : "Sí, anular") + '</button><button type="button" class="btn line" id="no">No, mantener</button></div>';
+  else html += '<div class="acts"><a class="btn" href="index.html#reserva">Reservar otra hora</a></div>';
+  return html;
+}
+function pintar(foco){
+  $("#card").innerHTML = !DB ? '<p>Las reservas en línea todavía no están activas.</p><p class="fine">Para revisar o cambiar su hora, comuníquese con la clínica.</p><div class="acts"><a class="btn" href="index.html">Volver al inicio</a></div>'
+                       : S.res ? detalle() : formulario();
+  if (foco) { var el = $(foco); if (el) el.focus(); }
+}
+function buscar(){
+  S.codigo = $("#codigo").value.trim().toUpperCase(); S.valor = $("#doc").value.trim();
+  if (!S.codigo || !S.valor) { S.error = "Escriba el código y el " + (S.doc === "rut" ? "RUT" : "pasaporte") + "."; return pintar(S.codigo ? "#doc" : "#codigo"); }
+  S.cargando = true; S.error = ""; pintar();
+  DB.rpc("ver_reserva", { cod: S.codigo, doc: S.valor }).then(function(r){
+    S.cargando = false;
+    if (r.error) { S.error = "No pudimos conectarnos. Intente de nuevo."; return pintar(); }
+    if (!r.data || !r.data.length) { S.error = "No encontramos una reserva con ese código y " + (S.doc === "rut" ? "RUT" : "pasaporte") + ". Revise que estén bien escritos."; return pintar("#codigo"); }
+    S.res = r.data[0]; pintar();
+  }, function(){ S.cargando = false; S.error = "No pudimos conectarnos. Intente de nuevo."; pintar(); });
+}
+function anular(){
+  S.cargando = true; S.error = ""; pintar();
+  DB.rpc("cancelar_reserva", { cod: S.res.codigo, doc: S.valor }).then(function(r){
+    S.cargando = false; S.seguro = false;
+    if (r.error || !r.data) { S.error = "No se pudo anular. Puede que la hora ya haya pasado o esté anulada."; return pintar(); }
+    S.res.estado = "cancelada"; S.aviso = "Su hora fue anulada."; pintar();
+  }, function(){ S.cargando = false; S.error = "No pudimos conectarnos. Intente de nuevo."; pintar(); });
+}
+document.addEventListener("input", function(ev){ if (ev.target.id === "codigo") S.codigo = ev.target.value; if (ev.target.id === "doc") S.valor = ev.target.value; });
+document.addEventListener("submit", function(ev){ if (ev.target.id === "buscar") { ev.preventDefault(); buscar(); } });
+document.addEventListener("click", function(ev){
+  var b = ev.target.closest("button"); if (!b) return;
+  if (b.id === "swap") { S.codigo = $("#codigo").value; S.valor = ""; S.doc = S.doc === "rut" ? "pas" : "rut"; S.error = ""; pintar("#doc"); }
+  if (b.id === "anular") { S.seguro = true; S.aviso = ""; pintar("#no"); }
+  if (b.id === "no") { S.seguro = false; pintar("#anular"); }
+  if (b.id === "si" && !S.cargando) anular();
+});
+
+window.conectar().then(function(db){
+  DB = db;
+  if (!db) return pintar();
+  db.from("config").select("datos").eq("id", 1).single().then(function(r){
+    var d = r.data && r.data.datos || {};
+    if (d.nombre) { document.querySelectorAll("[data-nombre]").forEach(function(el){ el.textContent = d.nombre; }); document.title = "Mi reserva | " + d.nombre; }
+    WA = (d.whatsapp || "").replace(/\D/g, ""); pintar();
+  }, function(){ pintar(); });
+  pintar(S.codigo ? "#doc" : "#codigo");
+});
+})();
+</script>
+</body>
+</html>
