@@ -262,6 +262,12 @@ revoke all on public.reservas from anon;
 revoke all on public.visitas from anon;
 grant insert (evento, movil, origen) on public.visitas to anon, authenticated;
 grant select on public.config to anon, authenticated;
+-- Permisos explícitos (funciona aunque "Automatically expose new tables" esté desactivado)
+grant usage on schema public to anon, authenticated;
+grant update on public.config to authenticated;
+grant select on public.admins to authenticated;
+grant select, insert, update, delete on public.reservas to authenticated;
+grant select on public.visitas to authenticated;
 
 -- ---------- Funciones públicas (lo único que un visitante puede hacer) ----------
 
