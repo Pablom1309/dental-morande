@@ -6,8 +6,8 @@
    - SUPABASE_KEY: la clave pública "anon" / "publishable" (NUNCA la "service_role" / "secret")
    Si quedan vacíos, la página funciona en modo demostración (sin guardar reservas).
    ============================================================ */
-window.SUPABASE_URL = "";
-window.SUPABASE_KEY = "";
+window.SUPABASE_URL = "https://aovqurmjrgyvrxvbolis.supabase.co";
+window.SUPABASE_KEY = "sb_publishable_OWHWlPKj94uUgd_kJxM24Q_5LJdpjBk";
 
 /* Carga la librería de Supabase y entrega el cliente, o null si no hay conexión configurada. */
 window.conectar = function(){
